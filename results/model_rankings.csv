@@ -1,0 +1,4 @@
+model,rank_portfolio_pnl_volatility,rank_avg_option_value_eur,rank_avg_portfolio_value_eur,avg_rank,overall_rank
+black_scholes,1.0,1.0,1.0,1.0,1.0
+merton_jump,3.0,3.0,3.0,3.0,3.0
+sabr,2.0,2.0,2.0,2.0,2.0
