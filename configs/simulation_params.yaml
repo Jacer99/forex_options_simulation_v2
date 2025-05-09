@@ -1,0 +1,58 @@
+# Forex Options Simulation Configuration
+
+# General settings
+simulation_year: 2024
+data_dir: "data"
+results_dir: "results"
+plots_dir: "plots"
+
+# Market data parameters
+market_data:
+  base_eur_tnd_rate: 3.35
+  eur_rate_mean: 0.03
+  tnd_rate_mean: 0.08
+  volatility: 0.08
+
+# Options portfolio parameters
+portfolio:
+  n_options: 30
+  max_notional_eur: 10000000
+  min_option_notional: 100000
+  max_option_notional: 1000000
+  min_tenor_days: 5
+  max_tenor_days: 360
+
+# Pricing models configuration
+models:
+  - black_scholes
+  - merton_jump
+  - sabr
+
+# Model-specific parameters
+model_params:
+  black_scholes:
+    volatility_window: 21  # Days for historical volatility calculation
+  
+  merton_jump:
+    lambda: 1.0      # Jump frequency (per year)
+    mu_j: -0.05      # Average jump size
+    sigma_j: 0.08    # Jump size volatility
+    n_terms: 20      # Number of terms in series expansion
+    
+  merton_jump_mc:
+    lambda: 1.0
+    mu_j: -0.05
+    sigma_j: 0.08
+    n_sims: 10000    # Number of Monte Carlo simulations
+    
+  sabr:
+    beta: 0.5        # CEV parameter (0=normal, 1=lognormal)
+    rho: -0.3        # Correlation between price and volatility
+    nu: 0.4          # Volatility of volatility
+
+# Backtest configuration
+backtest:
+  enabled: true
+  start_date: "2024-01-01"
+  end_date: "2024-12-31"
+  frequency: "M"    # D=daily, W=weekly, M=monthly
