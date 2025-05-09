@@ -33,91 +33,87 @@ class BlackScholesFX:
     This is an extension of the Black-Scholes model for foreign exchange options.
     """
 
-    @staticmethod
-    def price(S, K, T, r_d, r_f, sigma, option_type='call'):
-        """
-        Calculate option price and Greeks using the Garman-Kohlhagen model.
+# In pricing.py - BlackScholesFX.price method
 
-        Parameters
-        ----------
-        S : float
-            Spot exchange rate (price of one unit of foreign currency in domestic currency)
-        K : float
-            Strike price
-        T : float
-            Time to maturity in years
-        r_d : float
-            Domestic risk-free interest rate (EUR)
-        r_f : float
-            Foreign risk-free interest rate (TND)
-        sigma : float
-            Volatility of the exchange rate
-        option_type : str
-            'call' or 'put'
 
-        Returns
-        -------
-        PricingResult
-            Object containing option price and Greeks
-        """
-        # Handle edge cases
-        if T <= 0:
-            if option_type.lower() == 'call':
-                price = max(0, S - K)
-                delta = 1.0 if S > K else 0.0
-            else:
-                price = max(0, K - S)
-                delta = -1.0 if S < K else 0.0
+@staticmethod
+def price(S, K, T, r_d, r_f, sigma, option_type='call'):
+    """
+    Calculate option price and Greeks using the Garman-Kohlhagen model.
 
-            return PricingResult(
-                price=price,
-                delta=delta,
-                gamma=0.0,
-                vega=0.0,
-                theta=0.0,
-                rho_d=0.0,
-                rho_f=0.0
-            )
+    Parameters are described in the docstring...
+    """
+    # Add scaling check for interest rates (converting percentages to decimals)
+    # If rates are provided as percentages (e.g., 3.835 instead of 0.03835)
+    if r_d > 1.0:
+        r_d = r_d / 100.0
+    if r_f > 1.0:
+        r_f = r_f / 100.0
 
-        # Calculate d1 and d2
-        d1 = (np.log(S/K) + (r_d - r_f + 0.5 * sigma**2) * T) / \
-            (sigma * np.sqrt(T))
-        d2 = d1 - sigma * np.sqrt(T)
-
-        # Option price calculation
+    # Rest of the function remains the same...
+    # Handle edge cases
+    if T <= 0:
         if option_type.lower() == 'call':
-            price = S * np.exp(-r_f * T) * norm.cdf(d1) - \
-                K * np.exp(-r_d * T) * norm.cdf(d2)
-
-            # Greeks for call
-            delta = np.exp(-r_f * T) * norm.cdf(d1)
-            rho_d = K * T * np.exp(-r_d * T) * norm.cdf(d2)
-            rho_f = -S * T * np.exp(-r_f * T) * norm.cdf(d1)
-        else:  # put
-            price = K * np.exp(-r_d * T) * norm.cdf(-d2) - \
-                S * np.exp(-r_f * T) * norm.cdf(-d1)
-
-            # Greeks for put
-            delta = -np.exp(-r_f * T) * norm.cdf(-d1)
-            rho_d = -K * T * np.exp(-r_d * T) * norm.cdf(-d2)
-            rho_f = S * T * np.exp(-r_f * T) * norm.cdf(-d1)
-
-        # Common Greeks
-        gamma = np.exp(-r_f * T) * norm.pdf(d1) / (S * sigma * np.sqrt(T))
-        vega = S * np.exp(-r_f * T) * norm.pdf(d1) * np.sqrt(T)
-        theta = -(S * sigma * np.exp(-r_f * T) * norm.pdf(d1)) / (2 * np.sqrt(T)) - \
-            r_d * K * np.exp(-r_d * T) * norm.cdf(d2) + \
-            r_f * S * np.exp(-r_f * T) * norm.cdf(d1)
+            price = max(0, S - K)
+            delta = 1.0 if S > K else 0.0
+        else:
+            price = max(0, K - S)
+            delta = -1.0 if S < K else 0.0
 
         return PricingResult(
             price=price,
             delta=delta,
-            gamma=gamma,
-            vega=vega,
-            theta=theta,
-            rho_d=rho_d,
-            rho_f=rho_f
+            gamma=0.0,
+            vega=0.0,
+            theta=0.0,
+            rho_d=0.0,
+            rho_f=0.0
         )
+
+    # Calculate d1 and d2
+    d1 = (np.log(S/K) + (r_d - r_f + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+
+    # Add logging for debugging
+    print(
+        f"DEBUG - Parameters: S={S}, K={K}, T={T}, r_d={r_d}, r_f={r_f}, sigma={sigma}")
+    print(
+        f"DEBUG - Calculations: d1={d1}, d2={d2}, N(d1)={norm.cdf(d1)}, N(d2)={norm.cdf(d2)}")
+
+    # Option price calculation
+    if option_type.lower() == 'call':
+        price = S * np.exp(-r_f * T) * norm.cdf(d1) - K * \
+            np.exp(-r_d * T) * norm.cdf(d2)
+
+        # Greeks for call
+        delta = np.exp(-r_f * T) * norm.cdf(d1)
+        rho_d = K * T * np.exp(-r_d * T) * norm.cdf(d2)
+        rho_f = -S * T * np.exp(-r_f * T) * norm.cdf(d1)
+    else:  # put
+        price = K * np.exp(-r_d * T) * norm.cdf(-d2) - S * \
+            np.exp(-r_f * T) * norm.cdf(-d1)
+
+        # Greeks for put
+        delta = -np.exp(-r_f * T) * norm.cdf(-d1)
+        rho_d = -K * T * np.exp(-r_d * T) * norm.cdf(-d2)
+        rho_f = S * T * np.exp(-r_f * T) * norm.cdf(-d1)
+
+    # Common Greeks
+    gamma = np.exp(-r_f * T) * norm.pdf(d1) / (S * sigma * np.sqrt(T))
+    vega = S * np.exp(-r_f * T) * norm.pdf(d1) * np.sqrt(T)
+    theta = -(S * sigma * np.exp(-r_f * T) * norm.pdf(d1)) / (2 * np.sqrt(T)) - r_d * \
+        K * np.exp(-r_d * T) * norm.cdf(d2) + r_f * \
+        S * np.exp(-r_f * T) * norm.cdf(d1)
+
+    return PricingResult(
+        price=price,
+        delta=delta,
+        gamma=gamma,
+        vega=vega,
+        theta=theta,
+        rho_d=rho_d,
+        rho_f=rho_f
+    )
 
 
 class MertonJumpDiffusion:

@@ -139,6 +139,7 @@ class PortfolioManager:
 
             # Price with each model
             for model in models:
+                # In portfolio.py - price_portfolio method
                 try:
                     # Prepare parameters for pricing
                     params = {
@@ -151,18 +152,23 @@ class PortfolioManager:
                         'option_type': option_type
                     }
 
-                    # Add model-specific parameters
-                    if model == 'merton_jump' or model == 'merton_jump_mc':
-                        params.update(model_params.get('merton_jump', {}))
-                    elif model == 'sabr':
-                        params.update({
-                            'alpha': vol,  # Use historical volatility as initial alpha
-                            **model_params.get('sabr', {})
-                        })
+                    # Add parameter validation
+                    for param_name, param_value in params.items():
+                        if param_name in ['S', 'K', 'T', 'sigma'] and (not isinstance(param_value, (int, float)) or param_value <= 0):
+                            raise ValueError(
+                                f"Invalid parameter {param_name}={param_value} (must be positive number)")
+                        if param_name in ['r_d', 'r_f'] and not isinstance(param_value, (int, float)):
+                            raise ValueError(
+                                f"Invalid parameter {param_name}={param_value} (must be a number)")
 
                     # Price the option
                     pricing_result = self.pricing_engine.price_option(
                         model, params)
+
+                    # Verify the result is not None
+                    if pricing_result is None:
+                        raise ValueError(
+                            f"Pricing engine returned None for {option['OptionID']}")
 
                     # Calculate option value in EUR
                     notional = option['NotionalEUR']
@@ -170,34 +176,23 @@ class PortfolioManager:
                         option['SpotRate']  # Number of TND units
                     option_value_eur = pricing_result.price * contract_size
 
-                    # Create result record
-                    result = {
-                        'pricing_date': pricing_date,
-                        'option_id': option['OptionID'],
-                        'model': model,
-                        'issue_date': issue_date,
-                        'maturity_date': maturity_date,
-                        'T': T,
-                        'spot': spot,
-                        'strike': strike,
-                        'price': pricing_result.price,
-                        'delta': pricing_result.delta,
-                        'gamma': pricing_result.gamma,
-                        'vega': pricing_result.vega,
-                        'theta': pricing_result.theta,
-                        'rho_d': pricing_result.rho_d,
-                        'rho_f': pricing_result.rho_f,
-                        'eur_rate': eur_rate,
-                        'tnd_rate': tnd_rate,
-                        'volatility': vol,
-                        'notional_eur': notional,
-                        'option_value_eur': option_value_eur
-                    }
-
-                    results.append(result)
                 except Exception as e:
+                    # Don't swallow the exception - log it clearly
                     print(
-                        f"Error pricing option {option['OptionID']} with model {model}: {e}")
+                        f"ERROR pricing option {option['OptionID']} with model {model}: {e}")
+                    print(f"Parameters: {params}")
+                    # Can still add a default result, but at least we know what went wrong
+                    pricing_result = PricingResult(
+                        # Using NaN instead of 0 to make errors more obvious
+                        price=float('nan'),
+                        delta=float('nan'),
+                        gamma=float('nan'),
+                        vega=float('nan'),
+                        theta=float('nan'),
+                        rho_d=float('nan'),
+                        rho_f=float('nan')
+                    )
+                    option_value_eur = float('nan')
 
         # Check if we managed to price any options
         if not valid_options_count:
