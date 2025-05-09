@@ -793,123 +793,254 @@ class VisualizationManager:
         except Exception as e:
             print(f"Error generating SABR volatility surface: {e}")
 
-    def plot_evaluation_results(self, model_evaluator, plot_types=None):
-        """
-        Plot model evaluation results.
 
-        Parameters
-        ----------
-        model_evaluator : object
-            Object containing model evaluation results
-        plot_types : list, optional
-            List of plot types to generate, by default all plots
-        """
-        if plot_types is None:
-            plot_types = ['portfolio_value', 'portfolio_delta', 'error_metrics',
-                          'pnl_time_series', 'performance_metrics', 'model_rankings']
+def plot_evaluation_results(self, model_evaluator, plot_types=None):
 
-        if model_evaluator.evaluation_results is None or model_evaluator.portfolio_metrics is None:
-            raise ValueError(
-                "Evaluation results not available. Run backtest first.")
+"""
+Plot model evaluation results.
 
-        # Plot portfolio value over time by model
-        if 'portfolio_value' in plot_types:
-            plt.figure(figsize=(12, 6))
+Parameters
+----------
+model_evaluator : object
+    Object containing model evaluation results
+plot_types : list, optional
+    List of plot types to generate, by default all plots
+"""
+if plot_types is None:
+    plot_types = ['portfolio_value', 'portfolio_delta', 'error_metrics',
+                  'pnl_time_series', 'performance_metrics', 'model_rankings']
 
-            for model in model_evaluator.portfolio_metrics['model'].unique():
-                model_data = model_evaluator.portfolio_metrics[
-                    model_evaluator.portfolio_metrics['model'] == model]
-                model_data = model_data.sort_values('eval_date')
+if model_evaluator.evaluation_results is None or model_evaluator.portfolio_metrics is None:
+    raise ValueError(
+        "Evaluation results not available. Run backtest first.")
 
-                plt.plot(model_data['eval_date'],
-                         model_data['total_value_eur'], label=model)
+# Plot portfolio value over time by model
+if 'portfolio_value' in plot_types:
+    plt.figure(figsize=(12, 6))
 
-            plt.title('Portfolio Value Over Time by Model')
-            plt.xlabel('Date')
-            plt.ylabel('Portfolio Value (EUR)')
-            plt.legend()
-            plt.grid(True)
-            plt.savefig(os.path.join(self.output_dir,
-                                     'portfolio_value_time_series.png'))
+    for model in model_evaluator.portfolio_metrics['model'].unique():
+        model_data = model_evaluator.portfolio_metrics[
+            model_evaluator.portfolio_metrics['model'] == model]
+        model_data = model_data.sort_values('eval_date')
+
+        plt.plot(model_data['eval_date'],
+                 model_data['total_value_eur'], label=model)
+
+    plt.title('Portfolio Value Over Time by Model')
+    plt.xlabel('Date')
+    plt.ylabel('Portfolio Value (EUR)')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(self.output_dir,
+                             'portfolio_value_time_series.png'))
+    plt.close()
+
+# Plot portfolio delta over time by model
+if 'portfolio_delta' in plot_types:
+    plt.figure(figsize=(12, 6))
+
+    for model in model_evaluator.portfolio_metrics['model'].unique():
+        model_data = model_evaluator.portfolio_metrics[
+            model_evaluator.portfolio_metrics['model'] == model]
+        model_data = model_data.sort_values('eval_date')
+
+        plt.plot(model_data['eval_date'],
+                 model_data['total_delta'], label=model)
+
+    plt.title('Portfolio Delta Over Time by Model')
+    plt.xlabel('Date')
+    plt.ylabel('Portfolio Delta')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(os.path.join(self.output_dir,
+                             'portfolio_delta_time_series.png'))
+    plt.close()
+
+# Plot error metrics
+if 'error_metrics' in plot_types:
+    try:
+        error_metrics = model_evaluator.calculate_model_error_metrics()
+
+        if not error_metrics.empty:
+            # Calculate average error metrics by model
+            avg_metrics = error_metrics.groupby('model').mean()
+
+            # Plot RMSE
+            plt.figure(figsize=(10, 6))
+            plt.bar(avg_metrics.index, avg_metrics['rmse'])
+            plt.title('Average RMSE by Model')
+            plt.xlabel('Model')
+            plt.ylabel('RMSE')
+            plt.grid(True, axis='y')
+            plt.savefig(os.path.join(
+                self.output_dir, 'model_rmse.png'))
             plt.close()
 
-        # Plot portfolio delta over time by model
-        if 'portfolio_delta' in plot_types:
-            plt.figure(figsize=(12, 6))
-
-            for model in model_evaluator.portfolio_metrics['model'].unique():
-                model_data = model_evaluator.portfolio_metrics[
-                    model_evaluator.portfolio_metrics['model'] == model]
-                model_data = model_data.sort_values('eval_date')
-
-                plt.plot(model_data['eval_date'],
-                         model_data['total_delta'], label=model)
-
-            plt.title('Portfolio Delta Over Time by Model')
-            plt.xlabel('Date')
-            plt.ylabel('Portfolio Delta')
-            plt.legend()
-            plt.grid(True)
-            plt.savefig(os.path.join(self.output_dir,
-                                     'portfolio_delta_time_series.png'))
+            # Plot MAPE
+            plt.figure(figsize=(10, 6))
+            plt.bar(avg_metrics.index, avg_metrics['mape'])
+            plt.title('Average MAPE by Model')
+            plt.xlabel('Model')
+            plt.ylabel('MAPE (%)')
+            plt.grid(True, axis='y')
+            plt.gca().yaxis.set_major_formatter(PercentFormatter())
+            plt.savefig(os.path.join(
+                self.output_dir, 'model_mape.png'))
             plt.close()
 
-        # Plot error metrics
-        if 'error_metrics' in plot_types:
-            try:
-                error_metrics = model_evaluator.calculate_model_error_metrics()
+            # Plot error metrics over time
+            for model in error_metrics['model'].unique():
+                model_errors = error_metrics[error_metrics['model'] == model].sort_values(
+                    'eval_date')
 
-                if not error_metrics.empty:
-                    # Calculate average error metrics by model
-                    avg_metrics = error_metrics.groupby('model').mean()
+                plt.figure(figsize=(12, 6))
+                plt.plot(model_errors['eval_date'],
+                         model_errors['rmse'], label='RMSE')
+                plt.plot(model_errors['eval_date'],
+                         model_errors['mae'], label='MAE')
 
-                    # Plot RMSE
-                    plt.figure(figsize=(10, 6))
-                    plt.bar(avg_metrics.index, avg_metrics['rmse'])
-                    plt.title('Average RMSE by Model')
-                    plt.xlabel('Model')
-                    plt.ylabel('RMSE')
-                    plt.grid(True, axis='y')
-                    plt.savefig(os.path.join(
-                        self.output_dir, 'model_rmse.png'))
-                    plt.close()
+                plt.title(f'Error Metrics Over Time - {model}')
+                plt.xlabel('Date')
+                plt.ylabel('Error')
+                plt.legend()
+                plt.grid(True)
+                plt.savefig(os.path.join(self.output_dir,
+                                         f'error_metrics_{model}.png'))
+                plt.close()
+    except Exception as e:
+        print(f"Error generating error metrics plots: {e}")
 
-                    # Plot MAPE
-                    plt.figure(figsize=(10, 6))
-                    plt.bar(avg_metrics.index, avg_metrics['mape'])
-                    plt.title('Average MAPE by Model')
-                    plt.xlabel('Model')
-                    plt.ylabel('MAPE (%)')
-                    plt.grid(True, axis='y')
-                    plt.gca().yaxis.set_major_formatter(PercentFormatter())
-                    plt.savefig(os.path.join(
-                        self.output_dir, 'model_mape.png'))
-                    plt.close()
-
-                    # Plot error metrics over time
-                    for model in error_metrics['model'].unique():
-                        model_errors = error_metrics[error_metrics['model'] == model].sort_values(
-                            'eval_date')
-
-                        plt.figure(figsize=(12, 6))
-                        plt.plot(model_errors['eval_date'],
-                                 model_errors['rmse'], label='RMSE')
-                        plt.plot(model_errors['eval_date'],
-                                 model_errors['mae'], label='MAE')
-
-                        plt.title(f'Error Metrics Over Time - {model}')
-                        plt.xlabel('Date')
-                        plt.ylabel('Error')
-                        plt.legend()
-                        plt.grid(True)
-                        plt.savefig(os.path.join(self.output_dir,
-                                                 f'error_metrics_{model}.png'))
-                        plt.close()
-            except Exception as e:
-                print(f"Error generating error metrics plots: {e}")
-
-        # Plot PnL time series
 # Plot PnL time series
+if 'pnl_time_series' in plot_types:
+    try:
+        pnl_series = model_evaluator.calculate_pnl_time_series()
+
+        if not pnl_series.empty:
+            # Plot PnL time series
+            plt.figure(figsize=(12, 6))
+
+            for model in pnl_series['model'].unique():
+                model_pnl = pnl_series[pnl_series['model'] == model].sort_values(
+                    'date')
+                plt.plot(model_pnl['date'],
+                         model_pnl['pnl'], label=model)
+
+            plt.title('Portfolio PnL Over Time by Model')
+            plt.xlabel('Date')
+            plt.ylabel('PnL (EUR)')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(os.path.join(
+                self.output_dir, 'pnl_time_series.png'))
+            plt.close()
+
+            # Plot cumulative PnL
+            plt.figure(figsize=(12, 6))
+
+            for model in pnl_series['model'].unique():
+                model_pnl = pnl_series[pnl_series['model'] == model].sort_values(
+                    'date')
+                plt.plot(
+                    model_pnl['date'], model_pnl['pnl'].cumsum(), label=model)
+
+            plt.title('Cumulative Portfolio PnL by Model')
+            plt.xlabel('Date')
+            plt.ylabel('Cumulative PnL (EUR)')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(os.path.join(
+                self.output_dir, 'cumulative_pnl.png'))
+            plt.close()
+
+            # Plot PnL distribution
+            plt.figure(figsize=(12, 6))
+
+            for model in pnl_series['model'].unique():
+                model_pnl = pnl_series[pnl_series['model'] == model]
+                sns.histplot(model_pnl['pnl'],
+                             kde=True, label=model, alpha=0.5)
+
+            plt.title('PnL Distribution by Model')
+            plt.xlabel('PnL (EUR)')
+            plt.ylabel('Frequency')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig(os.path.join(
+                self.output_dir, 'pnl_distribution.png'))
+            plt.close()
+    except Exception as e:
+        print(f"Error generating PnL plots: {e}")
+
+# Plot performance metrics
+if 'performance_metrics' in plot_types:
+    try:
+        performance_metrics = model_evaluator.calculate_performance_metrics()
+
+        if not performance_metrics.empty:
+            # Plot key performance metrics
+            metrics = ['avg_option_value_eur',
+                       'portfolio_pnl_volatility', 'avg_portfolio_value_eur']
+            for metric in metrics:
+                if metric in performance_metrics and not performance_metrics[metric].isna().all():
+                    plt.figure(figsize=(10, 6))
+                    plt.bar(
+                        performance_metrics['model'], performance_metrics[metric])
+                    plt.title(
+                        f'{metric.replace("_", " ").title()} by Model')
+                    plt.xlabel('Model')
+                    plt.ylabel(metric.replace('_', ' ').title())
+                    plt.grid(True, axis='y')
+                    plt.savefig(os.path.join(
+                        self.output_dir, f'{metric}_by_model.png'))
+                    plt.close()
+    except Exception as e:
+        print(f"Error generating performance metrics plots: {e}")
+
+# Plot model rankings
+if 'model_rankings' in plot_types:
+    try:
+        rankings = model_evaluator.calculate_model_rankings()
+
+        if not rankings.empty and 'overall_rank' in rankings:
+            plt.figure(figsize=(10, 6))
+            plt.bar(rankings['model'], rankings['overall_rank'])
+            plt.title('Overall Model Ranking')
+            plt.xlabel('Model')
+            plt.ylabel('Rank (Lower is Better)')
+            plt.grid(True, axis='y')
+            plt.savefig(os.path.join(self.output_dir,
+                                     'model_overall_ranking.png'))
+            plt.close()
+
+            # Plot breakdown of rankings
+            ranking_cols = [
+                col for col in rankings.columns if col.startswith('rank_')]
+            if ranking_cols:
+                plt.figure(figsize=(12, 6))
+
+                x = np.arange(len(rankings))
+                width = 0.8 / len(ranking_cols)
+
+                for i, col in enumerate(ranking_cols):
+                    plt.bar(x + i*width, rankings[col], width,
+                            label=col.replace('rank_', '').replace('_', ' ').title())
+
+                plt.xlabel('Model')
+                plt.ylabel('Rank (Lower is Better)')
+                plt.title('Model Rankings by Criterion')
+                plt.xticks(x + width*len(ranking_cols) /
+                           2, rankings['model'])
+                plt.legend()
+                plt.grid(True, axis='y')
+                plt.savefig(os.path.join(self.output_dir,
+                                         'model_rankings_breakdown.png'))
+                plt.close()
+    except Exception as e:
+        print(f"Error generating model ranking plots: {e}")
+
+# Plot PnL time series
+    # add all valid plot types
+    plot_types = ['pnl_time_series', 'other_plot_types_that_should_be_here']
     if 'pnl_time_series' in plot_types:
         try:
             pnl_series = model_evaluator.calculate_pnl_time_series()

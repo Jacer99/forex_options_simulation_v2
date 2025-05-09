@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 from tqdm import tqdm
 
 
@@ -269,7 +269,7 @@ class ModelEvaluator:
             # Calculate average Delta and Gamma
             avg_delta = model_results['delta'].mean()
             avg_gamma = model_results['gamma'].mean(
-            ) if 'gamma' in model_results else np.nan
+            ) if 'gamma' in model_results.columns else np.nan
 
             # Calculate average option value
             avg_value = model_results['option_value_eur'].mean()
@@ -412,7 +412,7 @@ class ModelEvaluator:
         for criterion, direction in ranking_criteria.items():
             if criterion in metrics.columns:
                 # Skip criterion if it contains NaN values
-                if metrics[criterion].isna().any():
+                if metrics[criterion].isna().all():
                     continue
 
                 # Calculate ranking (1 is best)

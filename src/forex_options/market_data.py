@@ -217,7 +217,19 @@ class MarketDataGenerator:
                 output_dir, 'tnd_interest_rates_monthly.csv'), index=False)
 
     def load_data(self, input_dir='data'):
+        """
+        Load market data from CSV files.
 
+        Parameters
+        ----------
+        input_dir : str
+            Directory to load data from
+
+        Returns
+        -------
+        bool
+            True if data was loaded successfully, False otherwise
+        """
         try:
             self.eur_tnd_daily = pd.read_csv(
                 os.path.join(input_dir, 'eur_tnd_daily_rates.csv'))
@@ -233,6 +245,12 @@ class MarketDataGenerator:
                 input_dir, 'tnd_interest_rates_monthly.csv'))
             self.tnd_rates_monthly['Date'] = pd.to_datetime(
                 self.tnd_rates_monthly['Date'], dayfirst=True)
+
+            # Check and fix data issues
+            if self.check_and_fix_data():
+                print("Fixed issues in the loaded data.")
+                # Re-save the fixed data
+                self.save_data(input_dir)
 
             return True
         except Exception as e:
@@ -263,12 +281,30 @@ class MarketDataGenerator:
             output_dir, 'tnd_interest_rates_monthly.csv')
 
         if os.path.exists(eur_tnd_path) and os.path.exists(eur_rates_path) and os.path.exists(tnd_rates_path):
-            return self.load_data(output_dir)
-        else:
-            self.generate_eur_tnd_daily()
-            self.generate_interest_rates()
-            self.save_data(output_dir)
-            return True
+            load_success = self.load_data(output_dir)
+            if load_success:
+                return True
+            print("Failed to load existing data files. Regenerating...")
+
+        # Generate new data
+        print("Generating new market data...")
+        self.generate_eur_tnd_daily()
+        self.generate_interest_rates()
+
+        # Ensure 'Return' column and volatility exists
+        if 'Return' not in self.eur_tnd_daily.columns:
+            self.eur_tnd_daily['Return'] = self.eur_tnd_daily['EUR/TND'].pct_change().fillna(0)
+
+        # Calculate volatility
+        for window in [5, 21, 63]:
+            vol_col = f'{window}d_Volatility'
+            self.eur_tnd_daily[vol_col] = self.eur_tnd_daily['Return'].rolling(
+                window=window).std() * np.sqrt(252)
+
+        self.save_data(output_dir)
+        return True
+
+    # Modifications to src/forex_options/market_data.py
 
     def calculate_historical_volatility(self, date, window_size=21):
         """
@@ -295,11 +331,135 @@ class MarketDataGenerator:
         data = self.eur_tnd_daily[mask].tail(window_size)
 
         if len(data) < window_size:
-            raise ValueError(
-                f"Not enough historical data for {window_size}-day volatility calculation.")
+            print(
+                f"Warning: Not enough data for {window_size}-day volatility. Using available data ({len(data)} days).")
+            if len(data) == 0:
+                return 0.15  # Default volatility if no data available
+
+        # Ensure 'Return' column exists in data
+        if 'Return' not in data.columns:
+            print(f"Warning: 'Return' column not found. Calculating returns now.")
+            # Calculate returns if not present
+            if len(data) > 1:
+                pct_change = data['EUR/TND'].pct_change().fillna(0)
+                # Create a copy to avoid SettingWithCopyWarning
+                data_copy = data.copy()
+                data_copy['Return'] = pct_change
+                data = data_copy
+            else:
+                # Default volatility for single data point
+                return 0.15
 
         # Calculate annualized volatility
         return data['Return'].std() * np.sqrt(252)
+
+    def get_market_data(self, date, volatility_window=21):
+        """
+        Get all market data for a specific date.
+
+        Parameters
+        ----------
+        date : datetime
+            Date for which to get market data
+        volatility_window : int
+            Window size for historical volatility calculation
+
+        Returns
+        -------
+        dict
+            Dictionary with all market data for the date
+        """
+        try:
+            # Get spot rate
+            try:
+                spot_rate = self.get_spot_rate(date)
+                if spot_rate <= 0:
+                    raise ValueError(f"Invalid spot rate: {spot_rate}")
+            except Exception as e:
+                print(f"Error getting spot rate for {date}: {e}")
+                raise ValueError(f"Invalid spot rate for {date}")
+
+            # Get interest rates
+            try:
+                eur_rate, tnd_rate = self.get_interest_rates(date)
+                # Validate interest rates (ensure they're not 0 or NaN)
+                if eur_rate <= 0 or tnd_rate <= 0 or pd.isna(eur_rate) or pd.isna(tnd_rate):
+                    raise ValueError(
+                        f"Invalid interest rates: EUR={eur_rate}, TND={tnd_rate}")
+            except Exception as e:
+                print(f"Error getting interest rates for {date}: {e}")
+                raise ValueError(f"Invalid interest rates for {date}")
+
+            # Calculate historical volatility
+            try:
+                volatility = self.calculate_historical_volatility(
+                    date, volatility_window)
+                if pd.isna(volatility) or volatility <= 0:
+                    volatility = 0.15  # Default volatility if calculation fails
+                    print(
+                        f"Warning: Using default volatility (15%) for {date}")
+            except Exception as e:
+                volatility = 0.15  # Default volatility if calculation fails
+                print(
+                    f"Warning: Using default volatility (15%) for {date}: {e}")
+
+            return {
+                'date': date,
+                'spot_rate': spot_rate,
+                'eur_rate': eur_rate,
+                'tnd_rate': tnd_rate,
+                'volatility': volatility
+            }
+        except Exception as e:
+            raise ValueError(f"Error getting market data for {date}: {e}")
+
+    def check_and_fix_data(self):
+        fixed = False
+
+    # Check exchange rate data
+        if self.eur_tnd_daily is not None:
+            # Add Return column if missing
+            if 'Return' not in self.eur_tnd_daily.columns:
+                print("Adding 'Return' column to exchange rate data...")
+                self.eur_tnd_daily['Return'] = self.eur_tnd_daily['EUR/TND'].pct_change().fillna(0)
+                fixed = True
+
+        # Calculate volatility columns if missing
+            for window in [5, 21, 63]:
+                vol_col = f'{window}d_Volatility'
+                if vol_col not in self.eur_tnd_daily.columns:
+                    print(
+                        f"Adding '{vol_col}' column to exchange rate data...")
+                    self.eur_tnd_daily[vol_col] = self.eur_tnd_daily['Return'].rolling(
+                        window=window).std() * np.sqrt(252)
+                    fixed = True
+
+    # Check interest rate data
+        if self.eur_rates_monthly is not None:
+            # Remove rows with invalid rates (0 or NaN)
+            if 'EUR_Rate' in self.eur_rates_monthly.columns:
+                invalid_mask = (self.eur_rates_monthly['EUR_Rate'] <= 0) | pd.isna(
+                    self.eur_rates_monthly['EUR_Rate'])
+                if invalid_mask.any():
+                    print(
+                        f"Removing {invalid_mask.sum()} rows with invalid EUR interest rates...")
+                    self.eur_rates_monthly = self.eur_rates_monthly[~invalid_mask].reset_index(
+                        drop=True)
+                    fixed = True
+
+        if self.tnd_rates_monthly is not None:
+            # Remove rows with invalid rates (0 or NaN)
+            if 'TND_Rate' in self.tnd_rates_monthly.columns:
+                invalid_mask = (self.tnd_rates_monthly['TND_Rate'] <= 0) | pd.isna(
+                    self.tnd_rates_monthly['TND_Rate'])
+                if invalid_mask.any():
+                    print(
+                        f"Removing {invalid_mask.sum()} rows with invalid TND interest rates...")
+                    self.tnd_rates_monthly = self.tnd_rates_monthly[~invalid_mask].reset_index(
+                        drop=True)
+                    fixed = True
+
+        return fixed
 
     def get_interest_rates(self, date):
         """

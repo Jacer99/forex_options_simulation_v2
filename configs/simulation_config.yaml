@@ -17,7 +17,7 @@ market_data:
 portfolio:
   n_options: 30
   max_notional_eur: 10000000
-  min_option_notional: 100000
+  min_option_notional: 10000
   max_option_notional: 1000000
   min_tenor_days: 5
   max_tenor_days: 360
